@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>極簡記帳本</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --sub: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --income: #10b981;
+      --expense: #ef4444;
+      --warning: #f59e0b;
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      padding-bottom: 40px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 頂部本月總覽卡片 */
+    .summary-card {
+      background: linear-gradient(135deg, #1e293b, #334155);
+      color: #ffffff;
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: 0 10px 25px -5px rgba(30, 41, 59, 0.2);
+    }
+
+    .summary-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .month-picker {
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .month-picker::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+    }
+
+    .balance-label {
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+
+    .balance-amount {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 4px 0 16px;
+      letter-spacing: -0.5px;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .stat-item span {
+      display: block;
+      font-size: 12px;
+      color: #cbd5e1;
+      margin-bottom: 2px;
+    }
+
+    .stat-item strong {
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    .stat-income strong { color: #34d399; }
+    .stat-expense strong { color: #f87171; }
+
+    /* 預算區塊 */
+    .budget-section {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .budget-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .budget-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #cbd5e1;
+    }
+
+    .edit-budget-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .edit-budget-btn:active {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .budget-status-text {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #34d399;
+      border-radius: 99px;
+      transition: width 0.3s ease, background-color 0.3s ease;
+    }
+
+    .progress-fill.warning { background: var(--warning); }
+    .progress-fill.danger { background: var(--expense); }
+
+    /* 超支與警戒提示橫幅 */
+    .budget-alert {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      display: none;
+    }
+
+    .budget-alert.show-warning {
+      display: block;
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    .budget-alert.show-danger {
+      display: block;
+      background: rgba(239, 68, 68, 0.25);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.5);
+    }
+
+    /* 內嵌預算設定表單 */
+    .budget-edit-box {
+      margin-top: 10px;
+      display: none;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .budget-edit-box.open {
+      display: flex;
+    }
+
+    .budget-edit-box input {
+      height: 36px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 14px;
+      padding: 0 10px;
+      border-radius: 8px;
+    }
+
+    .budget-edit-box input::placeholder {
+      color: #94a3b8;
+    }
+
+    .budget-save-btn {
+      height: 36px;
+      padding: 0 14px;
+      background: var(--income);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* 通用卡片 */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+    }
+
+    /* 圓餅圖區塊 */
+    .chart-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      width: 160px;
+      height: 160px;
+    }
+
+    .pie-chart {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: #e2e8f0;
+    }
+
+    .chart-legend {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .legend-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .legend-right {
+      font-weight: 600;
+      color: var(--sub);
+    }
+
+    /* 新增表單卡片 */
+    .type-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 14px;
+    }
+
+    .type-btn {
+      border: none;
+      background: transparent;
+      padding: 10px;
+      border-radius: 9px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--sub);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .type-btn.active[data-type="expense"] {
+      background: var(--card);
+      color: var(--expense);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    .type-btn.active[data-type="income"] {
+      background: var(--card);
+      color: var(--income);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    .form-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: var(--sub);
+      font-weight: 500;
+    }
+
+    input, select {
+      width: 100%;
+      height: 44px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 16px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+    }
+
+    .submit-btn {
+      margin-top: 4px;
+      height: 46px;
+      border: none;
+      border-radius: 12px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .submit-btn:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+
+    /* 明細列表 */
+    .list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .list-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .clear-btn {
+      background: none;
+      border: none;
+      color: var(--sub);
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .tx-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tx-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--bg);
+      border-radius: 12px;
+      gap: 10px;
+    }
+
+    .tx-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      overflow: hidden;
+    }
+
+    .tx-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tx-cat {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .tx-date {
+      font-size: 12px;
+      color: var(--sub);
+    }
+
+    .tx-note {
+      font-size: 13px;
+      color: var(--sub);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tx-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .tx-amount {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .tx-amount.income { color: var(--income); }
+    .tx-amount.expense { color: var(--expense); }
+
+    .del-btn {
+      background: #e2e8f0;
+      border: none;
+      color: #475569;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .del-btn:active {
+      background: #cbd5e1;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 28px 0;
+      color: var(--sub);
+      font-size: 14px;
+    }
+
+    /* CSV 匯出區塊 */
+    .export-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .export-btn {
+      height: 42px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .export-btn:active {
+      background: #e2e8f0;
+      transform: scale(0.98);
+    }
+
+    .import-box {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .import-btn {
+      width: 100%;
+      height: 42px;
+      border: 1px dashed var(--primary);
+      background: rgba(37, 99, 235, 0.06);
+      color: var(--primary);
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .import-btn:active {
+      background: rgba(37, 99, 235, 0.15);
+      transform: scale(0.98);
+    }
+
+    .template-btn {
+      width: 100%;
+      height: 42px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--sub);
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .template-btn:active {
+      background: var(--bg);
+      transform: scale(0.98);
+    }
+
+    /* 資料管理統計與危險操作區 */
+    .data-stats {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg);
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--sub);
+      margin-bottom: 12px;
+    }
+
+    .data-stats strong {
+      color: var(--text);
+    }
+
+    .manage-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+
+    .danger-zone-btn {
+      width: 100%;
+      height: 40px;
+      border: 1px solid #fecaca;
+      background: #fef2f2;
+      color: var(--expense);
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .danger-zone-btn:active {
+      background: #fee2e2;
+      transform: scale(0.98);
+    }
+
+    /* 底部提示與確認浮動通知 (取代 alert / confirm) */
+    .toast-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #1e293b;
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      z-index: 999;
+      opacity: 0;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      max-width: 90vw;
+      text-align: center;
+    }
+
+    .toast-bar.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .confirm-bar {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #991b1b;
+    }
+
+    .confirm-bar.open {
+      display: flex;
+    }
+
+    .confirm-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-danger {
+      background: var(--expense);
+      color: #fff;
+    }
+
+    .btn-cancel {
+      background: #e2e8f0;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 本月總額與預算卡片 -->
+    <section class="summary-card">
+      <div class="summary-header">
+        <span class="balance-label">本月結餘</span>
+        <input type="month" id="monthFilter" class="month-picker" aria-label="選擇月份" />
+      </div>
+      <div class="balance-amount" id="monthBalance">$0</div>
+      <div class="stats-row">
+        <div class="stat-item stat-income">
+          <span>本月總收入</span>
+          <strong id="monthIncome">+$0</strong>
+        </div>
+        <div class="stat-item stat-expense">
+          <span>本月總支出</span>
+          <strong id="monthExpense">-$0</strong>
+        </div>
+      </div>
+
+      <!-- 每月預算進度條 -->
+      <div class="budget-section">
+        <div class="budget-header">
+          <div class="budget-title-wrap">
+            <span>本月預算</span>
+            <button type="button" class="edit-budget-btn" id="editBudgetBtn">設定</button>
+          </div>
+          <span class="budget-status-text" id="budgetStatusText">未設定</span>
+        </div>
+        <div class="budget-edit-box" id="budgetEditBox">
+          <input type="number" id="budgetInput" inputmode="decimal" min="0" placeholder="輸入預算金額（0 為清除）" />
+          <button type="button" class="budget-save-btn" id="saveBudgetBtn">儲存</button>
+        </div>
+        <div class="progress-track" id="progressTrack" style="display: none;">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="budget-alert" id="budgetAlert"></div>
+      </div>
+    </section>
+
+    <!-- 支出圓餅圖分析卡片 -->
+    <section class="card" id="chartCard">
+      <div class="list-header" style="margin-bottom: 16px;">
+        <h2 class="list-title">本月支出佔比</h2>
+      </div>
+      <div class="chart-container">
+        <div class="chart-wrapper">
+          <div class="pie-chart" id="pieChart"></div>
+        </div>
+        <div class="chart-legend" id="chartLegend">
+          <div class="empty-state" style="padding: 10px 0;">尚無支出資料</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 新增記帳表單 -->
+    <section class="card">
+      <div class="type-toggle">
+        <button type="button" class="type-btn active" data-type="expense">支出</button>
+        <button type="button" class="type-btn" data-type="income">收入</button>
+      </div>
+
+      <form id="txForm" class="form-grid">
+        <div class="input-row">
+          <div class="field">
+            <label for="amount">金額</label>
+            <input type="number" id="amount" inputmode="decimal" step="any" min="0.01" placeholder="0" required />
+          </div>
+          <div class="field">
+            <label for="category">分類</label>
+            <select id="category"></select>
+          </div>
+        </div>
+
+        <div class="input-row">
+          <div class="field">
+            <label for="date">日期</label>
+            <input type="date" id="date" required />
+          </div>
+          <div class="field">
+            <label for="note">備註</label>
+            <input type="text" id="note" placeholder="選填（如：午餐）" maxlength="40" />
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn">新增紀錄</button>
+      </form>
+    </section>
+
+    <!-- 本月明細 -->
+    <section class="card">
+      <div class="list-header">
+        <h2 class="list-title">本月明細</h2>
+        <button type="button" class="clear-btn" id="clearMonthBtn">清空本月</button>
+      </div>
+      <div class="confirm-bar" id="clearConfirmBar">
+        <span id="clearConfirmText">確定要刪除本月所有紀錄嗎？</span>
+        <div class="confirm-actions">
+          <button type="button" class="btn-sm btn-cancel" id="cancelClearBtn">取消</button>
+          <button type="button" class="btn-sm btn-danger" id="confirmClearBtn">確定刪除</button>
+        </div>
+      </div>
+      <ul class="tx-list" id="txList"></ul>
+    </section>
+
+    <!-- 匯出與匯入資料卡片 -->
+    <section class="card">
+      <div class="list-header">
+        <h2 class="list-title">資料管理</h2>
+      </div>
+
+      <div class="data-stats">
+        <span>累計總筆數：<strong id="totalRecordsCount">0 筆</strong></span>
+        <span>已設預算月份：<strong id="totalBudgetsCount">0 個</strong></span>
+      </div>
+
+      <div class="export-grid">
+        <button type="button" class="export-btn" id="exportMonthBtn">📥 匯出本月 CSV</button>
+        <button type="button" class="export-btn" id="exportAllBtn">📦 匯出全部 CSV</button>
+      </div>
+      <div class="import-box">
+        <input type="file" id="csvFileInput" accept=".csv,text/csv" style="display: none;" />
+        <button type="button" class="import-btn" id="importCsvBtn">📤 從 CSV 匯入</button>
+        <button type="button" class="template-btn" id="downloadTemplateBtn">📄 下載匯入範本</button>
+      </div>
+
+      <div class="manage-divider"></div>
+
+      <div class="export-grid">
+        <button type="button" class="export-btn" id="exportJsonBtn">💾 完整備份 (JSON)</button>
+        <input type="file" id="jsonFileInput" accept=".json,application/json" style="display: none;" />
+        <button type="button" class="export-btn" id="importJsonBtn">🔄 還原完整備份</button>
+      </div>
+
+      <div style="margin-top: 10px;">
+        <button type="button" class="danger-zone-btn" id="clearAllDataBtn">🗑️ 清空全部歷史資料</button>
+        <div class="confirm-bar" id="clearAllConfirmBar">
+          <span>⚠️ 確定清空所有帳目與預算？此操作無法復原！</span>
+          <div class="confirm-actions">
+            <button type="button" class="btn-sm btn-cancel" id="cancelClearAllBtn">取消</button>
+            <button type="button" class="btn-sm btn-danger" id="confirmClearAllBtn">全部清空</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast-bar" id="toastBar"></div>
+
+  <script>
+    const STORAGE_KEY = 'simple_ledger_records_v1';
+    const BUDGET_KEY = 'simple_ledger_budgets_v1';
+
+    const CATEGORIES = {
+      expense: ['餐飲美食', '交通出行', '日常購物', '居家水電', '娛樂休閒', '醫療保健', '其他支出'],
+      income: ['薪資獎金', '投資理財', '兼職副業', '紅包/禮金', '其他收入']
+    };
+
+    const CATEGORY_COLORS = {
+      '餐飲美食': '#f59e0b',
+      '交通出行': '#3b82f6',
+      '日常購物': '#ec4899',
+      '居家水電': '#8b5cf6',
+      '娛樂休閒': '#06b6d4',
+      '醫療保健': '#10b981',
+      '其他支出': '#64748b'
+    };
+
+    let currentType = 'expense';
+    let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    let budgets = JSON.parse(localStorage.getItem(BUDGET_KEY) || '{}');
+
+    // DOM 元素
+    const monthFilter = document.getElementById('monthFilter');
+    const monthBalanceEl = document.getElementById('monthBalance');
+    const monthIncomeEl = document.getElementById('monthIncome');
+    const monthExpenseEl = document.getElementById('monthExpense');
+    const editBudgetBtn = document.getElementById('editBudgetBtn');
+    const budgetEditBox = document.getElementById('budgetEditBox');
+    const budgetInput = document.getElementById('budgetInput');
+    const saveBudgetBtn = document.getElementById('saveBudgetBtn');
+    const budgetStatusText = document.getElementById('budgetStatusText');
+    const progressTrack = document.getElementById('progressTrack');
+    const progressFill = document.getElementById('progressFill');
+    const budgetAlert = document.getElementById('budgetAlert');
+    const pieChartEl = document.getElementById('pieChart');
+    const chartLegendEl = document.getElementById('chartLegend');
+    const typeBtns = document.querySelectorAll('.type-btn');
+    const txForm = document.getElementById('txForm');
+    const amountInput = document.getElementById('amount');
+    const categorySelect = document.getElementById('category');
+    const dateInput = document.getElementById('date');
+    const noteInput = document.getElementById('note');
+    const txListEl = document.getElementById('txList');
+    const clearMonthBtn = document.getElementById('clearMonthBtn');
+    const clearConfirmBar = document.getElementById('clearConfirmBar');
+    const clearConfirmText = document.getElementById('clearConfirmText');
+    const cancelClearBtn = document.getElementById('cancelClearBtn');
+    const confirmClearBtn = document.getElementById('confirmClearBtn');
+    const exportMonthBtn = document.getElementById('exportMonthBtn');
+    const exportAllBtn = document.getElementById('exportAllBtn');
+    const importCsvBtn = document.getElementById('importCsvBtn');
+    const downloadTemplateBtn = document.getElementById('downloadTemplateBtn');
+    const csvFileInput = document.getElementById('csvFileInput');
+    const totalRecordsCountEl = document.getElementById('totalRecordsCount');
+    const totalBudgetsCountEl = document.getElementById('totalBudgetsCount');
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
+    const importJsonBtn = document.getElementById('importJsonBtn');
+    const jsonFileInput = document.getElementById('jsonFileInput');
+    const clearAllDataBtn = document.getElementById('clearAllDataBtn');
+    const clearAllConfirmBar = document.getElementById('clearAllConfirmBar');
+    const cancelClearAllBtn = document.getElementById('cancelClearAllBtn');
+    const confirmClearAllBtn = document.getElementById('confirmClearAllBtn');
+    const toastBar = document.getElementById('toastBar');
+
+    let toastTimer = null;
+    function showToast(message) {
+      toastBar.textContent = message;
+      toastBar.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastBar.classList.remove('show');
+      }, 3000);
+    }
+
+    function initDates() {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      dateInput.value = `${yyyy}-${mm}-${dd}`;
+      monthFilter.value = `${yyyy}-${mm}`;
+    }
+
+    function renderCategories() {
+      categorySelect.innerHTML = CATEGORIES[currentType]
+        .map(cat => `<option value="${cat}">${cat}</option>`)
+        .join('');
+    }
+
+    function formatMoney(num) {
+      return '$' + Number(num).toLocaleString('zh-TW', { maximumFractionDigits: 2 });
+    }
+
+    function saveRecords() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    }
+
+    function saveBudgets() {
+      localStorage.setItem(BUDGET_KEY, JSON.stringify(budgets));
+    }
+
+    function getMonthBudget(monthStr) {
+      if (budgets[monthStr] !== undefined) return budgets[monthStr];
+      if (budgets.default !== undefined) return budgets.default;
+      return 0;
+    }
+
+    function renderBudget(monthStr, totalExpense, triggerPopup = false) {
+      const budget = getMonthBudget(monthStr);
+
+      if (!budget || budget <= 0) {
+        budgetStatusText.textContent = '未設定';
+        progressTrack.style.display = 'none';
+        budgetAlert.className = 'budget-alert';
+        budgetAlert.textContent = '';
+        return;
+      }
+
+      progressTrack.style.display = 'block';
+      const remaining = budget - totalExpense;
+      const ratio = (totalExpense / budget) * 100;
+      const clampedPercent = Math.min(ratio, 100);
+
+      progressFill.style.width = `${clampedPercent}%`;
+      progressFill.className = 'progress-fill';
+      budgetAlert.className = 'budget-alert';
+
+      if (remaining < 0) {
+        const overAmount = Math.abs(remaining);
+        budgetStatusText.textContent = `超支 ${formatMoney(overAmount)} / 預算 ${formatMoney(budget)}`;
+        progressFill.classList.add('danger');
+        budgetAlert.classList.add('show-danger');
+        budgetAlert.textContent = `⚠️ 超支提醒！本月支出已超出預算 ${formatMoney(overAmount)}（達 ${ratio.toFixed(0)}%）`;
+
+        if (triggerPopup) {
+          budgetAlert.animate([
+            { transform: 'translateX(-4px)' },
+            { transform: 'translateX(4px)' },
+            { transform: 'translateX(0)' }
+          ], { duration: 250, iterations: 2 });
+        }
+      } else if (ratio >= 80) {
+        budgetStatusText.textContent = `剩餘 ${formatMoney(remaining)} / 預算 ${formatMoney(budget)}`;
+        progressFill.classList.add('warning');
+        budgetAlert.classList.add('show-warning');
+        budgetAlert.textContent = `⚡ 提醒：本月預算已使用 ${ratio.toFixed(0)}%，僅剩 ${formatMoney(remaining)}`;
+      } else {
+        budgetStatusText.textContent = `剩餘 ${formatMoney(remaining)} / 預算 ${formatMoney(budget)}`;
+      }
+    }
+
+    function renderChart(expenseRecords, totalExpense) {
+      if (totalExpense <= 0 || expenseRecords.length === 0) {
+        pieChartEl.style.background = '#e2e8f0';
+        chartLegendEl.innerHTML = `<div class="empty-state" style="padding: 10px 0;">尚無支出資料</div>`;
+        return;
+      }
+
+      const catTotals = {};
+      expenseRecords.forEach(item => {
+        catTotals[item.category] = (catTotals[item.category] || 0) + item.amount;
+      });
+
+      const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+
+      let cumulativePercent = 0;
+      const gradientStops = [];
+      const legendHtml = [];
+
+      sortedCats.forEach(([cat, amount]) => {
+        const percent = (amount / totalExpense) * 100;
+        const start = cumulativePercent;
+        const end = cumulativePercent + percent;
+        const color = CATEGORY_COLORS[cat] || '#94a3b8';
+
+        gradientStops.push(`${color} ${start}% ${end}%`);
+        cumulativePercent = end;
+
+        legendHtml.push(`
+          <div class="legend-item">
+            <div class="legend-left">
+              <span class="legend-color" style="background-color: ${color};"></span>
+              <span>${cat} (${percent.toFixed(1)}%)</span>
+            </div>
+            <span class="legend-right">${formatMoney(amount)}</span>
+          </div>
+        `);
+      });
+
+      pieChartEl.style.background = `conic-gradient(${gradientStops.join(', ')})`;
+      chartLegendEl.innerHTML = legendHtml.join('');
+    }
+
+    function render(triggerBudgetPopup = false) {
+      const selectedMonth = monthFilter.value;
+      const filtered = records
+        .filter(item => item.date.startsWith(selectedMonth))
+        .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+      let income = 0;
+      let expense = 0;
+      const expenseRecords = [];
+
+      filtered.forEach(item => {
+        if (item.type === 'income') {
+          income += item.amount;
+        } else {
+          expense += item.amount;
+          expenseRecords.push(item);
+        }
+      });
+
+      const balance = income - expense;
+      monthBalanceEl.textContent = (balance < 0 ? '-' : '') + formatMoney(Math.abs(balance));
+      monthIncomeEl.textContent = '+' + formatMoney(income);
+      monthExpenseEl.textContent = '-' + formatMoney(expense);
+
+      renderBudget(selectedMonth, expense, triggerBudgetPopup);
+      renderChart(expenseRecords, expense);
+
+      // 更新資料管理統計數字
+      totalRecordsCountEl.textContent = `${records.length} 筆`;
+      const budgetMonthsCount = Object.keys(budgets).filter(k => k !== 'default' && budgets[k] > 0).length;
+      totalBudgetsCountEl.textContent = `${budgetMonthsCount} 個`;
+
+      if (filtered.length === 0) {
+        txListEl.innerHTML = `<li class="empty-state">這個月還沒有任何記帳紀錄</li>`;
+        clearMonthBtn.style.display = 'none';
+        return;
+      }
+
+      clearMonthBtn.style.display = 'inline';
+      txListEl.innerHTML = filtered.map(item => `
+        <li class="tx-item">
+          <div class="tx-info">
+            <div class="tx-top">
+              <span class="tx-cat">${escapeHtml(item.category)}</span>
+              <span class="tx-date">${item.date.slice(5)}</span>
+            </div>
+            ${item.note ? `<div class="tx-note">${escapeHtml(item.note)}</div>` : ''}
+          </div>
+          <div class="tx-right">
+            <span class="tx-amount ${item.type}">
+              ${item.type === 'income' ? '+' : '-'}${formatMoney(item.amount)}
+            </span>
+            <button type="button" class="del-btn" onclick="deleteRecord(${item.id})" aria-label="刪除">✕</button>
+          </div>
+        </li>
+      `).join('');
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    // 匯出 CSV 核心函式
+    function exportToCSV(targetRecords, filename) {
+      if (!targetRecords || targetRecords.length === 0) {
+        showToast('目前沒有可匯出的紀錄！');
+        return;
+      }
+
+      // 依日期由新到舊排序
+      const sorted = [...targetRecords].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+      const headers = ['日期', '收支類型', '分類', '金額', '備註'];
+      const rows = sorted.map(item => {
+        const typeLabel = item.type === 'income' ? '收入' : '支出';
+        const safeCategory = `"${String(item.category).replace(/"/g, '""')}"`;
+        const safeNote = `"${String(item.note || '').replace(/"/g, '""')}"`;
+        return [item.date, typeLabel, safeCategory, item.amount, safeNote].join(',');
+      });
+
+      // 加入 \uFEFF (UTF-8 BOM) 確保 Excel 開啟不會亂碼
+      const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`已成功匯出：${filename}`);
+    }
+
+    // 解析單行 CSV（支援雙引號內的逗號與跳脫字元）
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (inQuotes) {
+          if (char === '"' && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else if (char === '"') {
+            inQuotes = false;
+          } else {
+            current += char;
+          }
+        } else {
+          if (char === '"') {
+            inQuotes = true;
+          } else if (char === ',') {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    // 從 CSV 文字匯入紀錄
+    function importFromCSV(text) {
+      // 移除 UTF-8 BOM 並依換行分割
+      const cleanText = text.replace(/^\uFEFF/, '');
+      const lines = cleanText.split(/\r?\n/).filter(line => line.trim() !== '');
+
+      if (lines.length <= 1) {
+        showToast('CSV 檔案內容為空或格式不正確');
+        return;
+      }
+
+      // 建立現有紀錄指紋集合，避免重複匯入完全相同的紀錄
+      const existingSignatures = new Set(
+        records.map(r => `${r.date}|${r.type}|${r.category}|${r.amount}|${r.note || ''}`)
+      );
+
+      let importedCount = 0;
+      let duplicateCount = 0;
+      const baseId = Date.now();
+
+      // 略過第一列標題（日期,收支類型,分類,金額,備註）
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i]);
+        if (cols.length < 4) continue;
+
+        const [rawDate, rawType, rawCategory, rawAmount, rawNote = ''] = cols;
+
+        // 驗證日期格式 (YYYY-MM-DD 或 YYYY/MM/DD)
+        const normalizedDate = rawDate.replace(/\//g, '-');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) continue;
+
+        // 對應收支類型
+        let type = '';
+        if (rawType === '收入' || rawType.toLowerCase() === 'income') {
+          type = 'income';
+        } else if (rawType === '支出' || rawType.toLowerCase() === 'expense') {
+          type = 'expense';
+        } else {
+          continue;
+        }
+
+        const amount = parseFloat(rawAmount);
+        if (isNaN(amount) || amount <= 0) continue;
+
+        const category = rawCategory || (type === 'income' ? '其他收入' : '其他支出');
+        const note = rawNote;
+        const signature = `${normalizedDate}|${type}|${category}|${amount}|${note}`;
+
+        if (existingSignatures.has(signature)) {
+          duplicateCount++;
+          continue;
+        }
+
+        existingSignatures.add(signature);
+        records.push({
+          id: baseId + i,
+          type,
+          amount,
+          category,
+          date: normalizedDate,
+          note
+        });
+        importedCount++;
+      }
+
+      if (importedCount > 0) {
+        saveRecords();
+        render(false);
+        showToast(`✅ 成功匯入 ${importedCount} 筆紀錄` + (duplicateCount > 0 ? `（略過 ${duplicateCount} 筆重複）` : ''));
+      } else if (duplicateCount > 0) {
+        showToast(`ℹ️ 檔案中的 ${duplicateCount} 筆紀錄皆已存在，無需重複匯入`);
+      } else {
+        showToast('❌ 找不到符合格式的記帳資料，請確認 CSV 欄位');
+      }
+    }
+
+    // 點擊匯入按鈕觸發檔案選擇
+    importCsvBtn.addEventListener('click', () => {
+      csvFileInput.value = '';
+      csvFileInput.click();
+    });
+
+    // 下載標準 CSV 匯入範本
+    downloadTemplateBtn.addEventListener('click', () => {
+      const todayStr = dateInput.value || new Date().toISOString().slice(0, 10);
+      const sampleRecords = [
+        { date: todayStr, type: 'expense', category: '餐飲美食', amount: 120, note: '午餐便當（範例）' },
+        { date: todayStr, type: 'income', category: '薪資獎金', amount: 50000, note: '本月薪資（範例）' }
+      ];
+      exportToCSV(sampleRecords, '記帳匯入範本.csv');
+    });
+
+    // 讀取選取的 CSV 檔案
+    csvFileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          importFromCSV(event.target.result);
+        } catch (err) {
+          showToast('讀取檔案失敗，請確認檔案格式是否為 UTF-8 CSV');
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    });
+
+    // 匯出本月按鈕
+    exportMonthBtn.addEventListener('click', () => {
+      const selectedMonth = monthFilter.value;
+      const monthRecords = records.filter(item => item.date.startsWith(selectedMonth));
+      exportToCSV(monthRecords, `記帳紀錄_${selectedMonth}.csv`);
+    });
+
+    // 匯出全部按鈕
+    exportAllBtn.addEventListener('click', () => {
+      const todayStr = dateInput.value || new Date().toISOString().slice(0, 10);
+      exportToCSV(records, `記帳紀錄_全部_${todayStr}.csv`);
+    });
+
+    // 完整 JSON 備份（包含所有帳目與每月預算設定）
+    exportJsonBtn.addEventListener('click', () => {
+      const todayStr = dateInput.value || new Date().toISOString().slice(0, 10);
+      const backupData = {
+        app: 'simple_ledger',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        records,
+        budgets
+      };
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `記帳本完整備份_${todayStr}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('已下載完整 JSON 備份檔（含預算設定）');
+    });
+
+    // 觸發 JSON 還原選擇
+    importJsonBtn.addEventListener('click', () => {
+      jsonFileInput.value = '';
+      jsonFileInput.click();
+    });
+
+    // 讀取並還原 JSON 備份檔
+    jsonFileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const parsed = JSON.parse(event.target.result);
+          if (!parsed || !Array.isArray(parsed.records)) {
+            showToast('❌ 無效的備份檔格式');
+            return;
+          }
+          records = parsed.records;
+          if (parsed.budgets && typeof parsed.budgets === 'object') {
+            budgets = parsed.budgets;
+            saveBudgets();
+          }
+          saveRecords();
+          render(false);
+          showToast(`✅ 已成功還原 ${records.length} 筆紀錄與預算設定`);
+        } catch (err) {
+          showToast('❌ 解析 JSON 備份檔失敗');
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    });
+
+    // 清空全部歷史資料（防誤觸雙重確認）
+    clearAllDataBtn.addEventListener('click', () => {
+      clearAllConfirmBar.classList.add('open');
+    });
+
+    cancelClearAllBtn.addEventListener('click', () => {
+      clearAllConfirmBar.classList.remove('open');
+    });
+
+    confirmClearAllBtn.addEventListener('click', () => {
+      records = [];
+      budgets = {};
+      saveRecords();
+      saveBudgets();
+      clearAllConfirmBar.classList.remove('open');
+      render(false);
+      showToast('🗑️ 已清空所有帳目與預算資料');
+    });
+
+    // 切換預算設定輸入框
+    editBudgetBtn.addEventListener('click', () => {
+      const isOpen = budgetEditBox.classList.toggle('open');
+      if (isOpen) {
+        const currentBudget = getMonthBudget(monthFilter.value);
+        budgetInput.value = currentBudget > 0 ? currentBudget : '';
+        budgetInput.focus();
+      }
+    });
+
+    // 儲存每月預算
+    saveBudgetBtn.addEventListener('click', () => {
+      const selectedMonth = monthFilter.value;
+      const val = parseFloat(budgetInput.value);
+
+      if (isNaN(val) || val <= 0) {
+        delete budgets[selectedMonth];
+        delete budgets.default;
+      } else {
+        budgets[selectedMonth] = val;
+        budgets.default = val;
+      }
+
+      saveBudgets();
+      budgetEditBox.classList.remove('open');
+      render(false);
+    });
+
+    typeBtns.forEach(b => {
+      b.addEventListener('click', () => {
+        typeBtns.forEach(btn => btn.classList.remove('active'));
+        b.classList.add('active');
+        currentType = b.dataset.type;
+        renderCategories();
+      });
+    });
+
+    txForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const amount = parseFloat(amountInput.value);
+      if (isNaN(amount) || amount <= 0) return;
+
+      const isExpense = currentType === 'expense';
+      const newRecord = {
+        id: Date.now(),
+        type: currentType,
+        amount,
+        category: categorySelect.value,
+        date: dateInput.value,
+        note: noteInput.value.trim()
+      };
+
+      records.push(newRecord);
+      saveRecords();
+      monthFilter.value = newRecord.date.slice(0, 7);
+
+      amountInput.value = '';
+      noteInput.value = '';
+      render(isExpense);
+    });
+
+    window.deleteRecord = function(id) {
+      records = records.filter(item => item.id !== id);
+      saveRecords();
+      render(false);
+      showToast('已刪除該筆紀錄');
+    };
+
+    clearMonthBtn.addEventListener('click', () => {
+      const selectedMonth = monthFilter.value;
+      clearConfirmText.textContent = `確定要刪除 ${selectedMonth} 的所有紀錄嗎？`;
+      clearConfirmBar.classList.add('open');
+    });
+
+    cancelClearBtn.addEventListener('click', () => {
+      clearConfirmBar.classList.remove('open');
+    });
+
+    confirmClearBtn.addEventListener('click', () => {
+      const selectedMonth = monthFilter.value;
+      records = records.filter(item => !item.date.startsWith(selectedMonth));
+      saveRecords();
+      clearConfirmBar.classList.remove('open');
+      render(false);
+      showToast(`已清空 ${selectedMonth} 的所有紀錄`);
+    });
+
+    monthFilter.addEventListener('change', () => {
+      clearConfirmBar.classList.remove('open');
+      render(false);
+    });
+
+    initDates();
+    renderCategories();
+    render(false);
+  </script>
+</body>
+</html>
